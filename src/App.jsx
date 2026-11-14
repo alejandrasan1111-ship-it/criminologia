@@ -188,7 +188,13 @@ function calculateProfile(decisions = []) {
     Observador: 'Tus decisiones demuestran un fuerte sentido observacional. Registraste detalles que otros pasaron por alto. Este perfil indica atención meticulosa a la evidencia.',
     Indeciso: 'Tus decisiones no muestran un patrón dominante claro. El equilibrio entre diferentes enfoques sugiere una investigación equilibrada o dudas razonables.'
   };
-  const colors = { Organizado:'#00B4FF', Reactivo:#FF4568, Manipulador:#E61B2E, Observador:'#35D9FF', Indeciso:'#FFD700' };
+  const colors = {
+    Organizado: '#00B4FF',
+    Reactivo: '#FF4568',
+    Manipulador: '#E61B2E',
+    Observador: '#35D9FF',
+    Indeciso: '#FFD700'
+  };
   
   // Ganar XP por completar perfil
   if (store) store.incrementXP(10);
