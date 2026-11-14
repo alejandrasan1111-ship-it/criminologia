@@ -1,0 +1,25 @@
+# Dependencias (Vercel las instala solo)
+node_modules/
+
+# Build generado
+dist/
+build/
+
+# Vercel
+.vercel/
+
+# Entorno
+.env
+.env.local
+.env.*.local
+
+# Logs y temporales
+*.log
+npm-debug.log*
+yarn-error.log*
+.DS_Store
+Thumbs.db
+
+# Editores
+.vscode/
+.idea/

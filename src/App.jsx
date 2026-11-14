@@ -2,18 +2,17 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity, ArrowLeft, ArrowRight, Award, BookOpen, Brain, BriefcaseBusiness, Check,
   ChevronRight, CircleHelp, ClipboardList, Clock3, Compass, FlaskConical,
-  GraduationCap, Leaf, LockKeyhole, Menu, MessageSquareText, Network, RotateCcw,
-  Search, ShieldCheck, Sparkles, Target, Users, Volume2, VolumeX, X, Zap
+  Leaf, LockKeyhole, Menu, MessageSquareText, Network, Microscope, RotateCcw,
+  Search, ShieldCheck, Target, Users, Volume2, VolumeX, X
 } from 'lucide-react';
 import { scenarios, difficulties } from './data/scenarios.js';
 import { extendedInterviewQuestions } from './data/interviewQuestions.js';
 import { advancedQuestions, behavioralProfileQuestions } from './data/advancedQuestions.js';
 import { questionBank } from './data/questionBank.js';
 import Scene3D from './components/Scene3D.jsx';
-import MbtiTest from './components/MbtiTest.jsx';
-import PersonalityTest from './components/PersonalityTest.jsx';
+import { MbtiTest, PersonalityTest } from './components/ForensicTests.jsx';
 import EvidenceAnalysisMiniGame from './components/EvidenceAnalysisMiniGame.jsx';
-import { supabaseConfigured, saveProgress, loadProgress, ensureAnonymousSession } from './lib/supabase.js';
+import { supabaseConfigured, saveProgress, loadProgress } from './lib/supabase.js';
 
 const iconMap = {
   messages: MessageSquareText, briefcase: BriefcaseBusiness, users: Users, leaf: Leaf
@@ -112,14 +111,6 @@ const AudioManager = {
   }
 };
 AudioManager.init();
-
-function showToast(message, type = 'info') {
-  const typeIcons = { success: 'Check', error: 'X', info: 'Clock3', warning: 'Alert' };
-  const typeColors = { success: '#4de68b', error: '#ff5b5b', info: '#35d9ff', warning: '#ffa502' };
-  setToast(message);
-  setToastType(type);
-  window.setTimeout(() => setToast(''), 4000);
-}
 
 // Store system for game progress
 const store = {
@@ -357,7 +348,7 @@ export default function App() {
   const [bankScore, setBankScore] = useState(0);
   const [bankFilter, setBankFilter] = useState('Todas');
   const [currentLevelProgress, setCurrentLevelProgress] = useState(0);
-  const [miniGameType, setMiniGameType] = useState<string | null>(null);
+  const [miniGameType, setMiniGameType] = useState(null);
   const bankCategories = useMemo(() => ['Todas', ...new Set(questionBank.map(q => q.category))], []);
   const filteredBank = useMemo(() => questionBank.filter(q => bankFilter === 'Todas' || q.category === bankFilter), [bankFilter]);
   const bankQuestion = filteredBank[Math.min(bankIndex, filteredBank.length - 1)];
@@ -370,11 +361,11 @@ export default function App() {
     if (saved.discoveries !== undefined) store.discoveries = saved.discoveries;
     if (saved.xp !== undefined) store.xp = saved.xp;
     if (saved.level !== undefined) store.level = saved.level;
-    if (saved.hypothesis !== undefined) hypothesis = saved.hypothesis;
-    if (saved.sessionScore !== undefined) sessionScore = saved.sessionScore;
-    if (saved.decisions !== undefined) decisions = saved.decisions;
-    if (saved.discovered !== undefined) discovered = saved.discovered;
     store.history = saved.history || [];
+    if (saved.hypothesis) setHypothesis(saved.hypothesis);
+    if (saved.sessionScore) setSessionScore(saved.sessionScore);
+    if (Array.isArray(saved.decisions) && saved.decisions.length) setDecisions(saved.decisions);
+    if (Array.isArray(saved.discovered) && saved.discovered.length) setDiscovered(saved.discovered);
   }, []);
 
   const scenario = useMemo(() => {
@@ -497,7 +488,10 @@ export default function App() {
             <div className="breadcrumbs"><span>ACADEMIA</span><ChevronRight size={13}/><strong>{({home:'PANEL PRINCIPAL',scenarios:'CASOS DE ESTUDIO',questionBank:'BANCO DE PREGUNTAS',case:'SIMULACIÓN ACTIVA',scene:'ESCENA 3D',report:'INFORME DE CASO',progress:'MI PROGRESO',bwModule:'VENTANAS ROTAS & PSICOPATÍA',mbti:'TEST MBTI FORENSE'})[page] || 'MINDTRACE'}</strong></div>
           </div>
           <div className="topbar-right">
-          <button className="audio-toggle-btn ${AudioManager.isPlaying?'audio-active':''}" onClick={AudioManager.toggle}><AudioManager.isPlaying?<Volume2 size={16}/>:<VolumeX size={16}/>><span>{AudioManager.isPlaying? 'SILENCiar' : 'ATMÓSFERA'}</span></button>
+          <button className={`audio-toggle-btn ${AudioManager.isPlaying?'audio-active':''}`} onClick={AudioManager.toggle}>
+            <span>{AudioManager.isPlaying ? <Volume2 size={16}/> : <VolumeX size={16}/>}</span>
+            <span>{AudioManager.isPlaying ? 'SILENCiar' : 'ATMÓSFERA'}</span>
+          </button>
           <MysteryAudioControl/><span className="status-pill"><span/> SIMULACIÓN EDUCATIVA</span><div className="avatar">MT</div></div>
         </header>
 
@@ -642,14 +636,19 @@ export default function App() {
 
         {page==='progress' && <section className="page-content">
           <div className="page-heading"><div><span className="eyebrow">REGISTRO DE APRENDIZAJE</span><h1>Mi progreso<span>.</span></h1><p>Consulta tus partidas, puntuaciones y habilidades desarrolladas.</p></div><div className="heading-counter"><Award size={28}/><span>PERFIL<br/>INVESTIGADOR</span></div></div>
-          <div className="stats-grid"><div className="stat-card"><div className="stat-top"><span>PARTIDAS GUARDADAS</span><ClipboardList size={17}/></div><strong>{history.length.toString().padStart(2,'0')}</strong><small>Este dispositivo</small></div><div className="stat-card"><div className="stat-top"><span>PUNTUACIÓN MEDIA</span><Award size={17}/></div><strong>{avgScore}<em>/100</em></strong><small>Promedio de tus casos</small></div><div className="stat-card"><div className="stat-top"><span>REGISTROS REMOTOS</span><Activity size={17}/></div><strong>{remoteHistory.length.toString().padStart(2,'0')}</strong><small>{supabaseConfigured?'Sincronizados con Supabase':'Conecta Supabase para sincronizar'}</small></div></div><div className="stat-card"><div className="stat-top"><span>NIVEL INVESTIGADOR</span><div className="hud-bar-container" style={{height:'8px','borderRadius':'4px','overflow':'hidden'}}><i className="hud-bar-fill" style={{width:`${(store.level||1)/5*100}%','background':'linear-gradient(90deg,#35d9ff,#00b4ff)','height':'100%'}}/></i></div></div><small>XP: {store.xp||0}</small></div></div>
+          <div className="stats-grid">
+            <div className="stat-card"><div className="stat-top"><span>PARTIDAS GUARDADAS</span><ClipboardList size={17}/></div><strong>{history.length.toString().padStart(2,'0')}</strong><small>Este dispositivo</small></div>
+            <div className="stat-card"><div className="stat-top"><span>PUNTUACIÓN MEDIA</span><Award size={17}/></div><strong>{avgScore}<em>/100</em></strong><small>Promedio de tus casos</small></div>
+            <div className="stat-card"><div className="stat-top"><span>REGISTROS REMOTOS</span><Activity size={17}/></div><strong>{remoteHistory.length.toString().padStart(2,'0')}</strong><small>{supabaseConfigured?'Sincronizados con Supabase':'Conecta Supabase para sincronizar'}</small></div>
+            <div className="stat-card"><div className="stat-top"><span>NIVEL INVESTIGADOR</span><div className="hud-bar-container" style={{height:'8px',borderRadius:'4px',overflow:'hidden'}}><i className="hud-bar-fill" style={{width:`${(store.level||1)/5*100}%`, background:'linear-gradient(90deg,#35d9ff,#00b4ff)', height:'100%'}}/></div></div><small>XP: {store.xp||0}</small></div>
+          </div>
           <div className="panel-card history-card"><div className="panel-title"><div className="panel-icon"><Clock3 size={18}/></div><div><span className="eyebrow">HISTORIAL</span><h3>Últimas investigaciones</h3></div></div>{history.length===0?<div className="empty-state"><div><ClipboardList size={26}/></div><strong>Aún no hay casos completados</strong><p>Inicia un expediente y guarda tu primer informe.</p><button className="button-primary compact" onClick={()=>go('scenarios')}>Explorar casos <ArrowRight size={15}/></button></div>:<div className="history-list">{history.map(item=><div className="history-row" key={item.id}><div className="history-icon"><MindtraceMark size={22}/></div><div className="history-name"><strong>{item.scenarioTitle||scenarios.find(s=>s.id===item.scenarioId)?.title||item.scenarioId}</strong><small>{item.difficulty} · {new Date(item.completedAt).toLocaleDateString('es-ES')}</small></div><div className="history-score"><strong>{item.score}</strong><small>/100</small></div><button className="icon-button" onClick={()=>startCase(item.scenarioId)} title="Repetir caso"><RotateCcw size={16}/></button></div>)}</div>}</div>
           <div className="mini-game-btn-container">
-            <button className="button-primary mini-game-btn" onClick={()=>setMiniGameType(Object.keys(miniGameData)[0])}>
+            <button className="button-primary mini-game-btn" onClick={()=>setMiniGameType('patternMatch')}>
               <Microscope size={16} /> Análisis Forense Mini-juego
             </button>
           </div>
-          {miniGameType && <EvidenceAnalysisMiniGame gameType={miniGameType} onComplete={()=>setMiniGameType(null)} />}
+          {miniGameType && <EvidenceAnalysisMiniGame onComplete={()=>setMiniGameType(null)} />}
           {supabaseConfigured && <div className="panel-card remote-card"><div className="panel-title"><div className="panel-icon"><ShieldCheck size={18}/></div><div><span className="eyebrow">SUPABASE</span><h3>Progreso sincronizado</h3></div><button className="text-button" onClick={()=>loadProgress().then(setRemoteHistory).catch(e=>notify(e.message))}>Actualizar <RotateCcw size={14}/></button></div>{remoteHistory.length?<div className="history-list">{remoteHistory.map(item=><div className="history-row" key={item.id}><div className="history-icon"><Activity size={18}/></div><div className="history-name"><strong>{scenarios.find(s=>s.id===item.scenario_id)?.title||item.scenario_id}</strong><small>{item.difficulty} · {new Date(item.created_at).toLocaleDateString('es-ES')}</small></div><div className="history-score"><strong>{item.score}</strong><small>/100</small></div></div>)}</div>:<p className="muted">Cuando guardes un informe autenticado, aparecerá aquí.</p>}</div>}
         </section>}
 
@@ -659,7 +658,31 @@ export default function App() {
         <footer className="app-footer"><div className="footer-brand"><MindtraceMark size={22}/><strong>MINDTRACE</strong></div><span>ENTORNO DE APRENDIZAJE · CASOS FICTICIOS</span><button onClick={()=>setShowGuide(true)}>Acerca del laboratorio <ArrowRight size={13}/></button></footer>
       </main>
       {toast && <div className="toast"><Check size={16}/>{toast}</div>}
-      {showGuide && <div className="modal-backdrop" onClick={()=>setShowGuide(false)}><div className="guide-modal" onClick={e=>e.stopPropagation()}><button className="modal-close icon-button" onClick={()=>setShowGuide(false)}><X size={18}/></button><div className="guide-icon"><MindtraceMark size={32}/></div><span className="eyebrow">MINDTRACE / GUÍA RÁPIDA</span><h2>Investigar es contrastar.</h2><p>Este laboratorio es una simulación académica. No representa un instrumento diagnóstico ni sustituye protocolos institucionales o asesoramiento profesional.</p><div className="guide-points"><div><Check size={16}/><span>Comienza con preguntas abiertas y evita preguntas sugestivas.</span></div><div><Check size={16}/><span>Contrasta testimonios con fuentes independientes.</span></div><div><Check size={16}/><span>Registra la incertidumbre y las hipótesis alternativas.</span></div><div><Check size={16}/><span>No interpretes nerviosismo, apariencia o antecedentes como prueba de culpabilidad.</span></div></div><div className="guide-connection"><div className={`connection-dot ${supabaseConfigured?'connected':''}`}/><div><strong>{supabaseConfigured?'Supabase detectado':'Supabase pendiente de configuración'}</strong><p>{supabaseConfigured?'La aplicación intentará sincronizar informes al guardarlos.':'Consulta README.md y supabase/schema.sql en el ZIP para conectar la base de datos.'}</p></div></div><button className="button-primary full-width" onClick={()=>setShowGuide(false)}>Entendido <Check size={16}/></button></div></div>}
+      {showGuide && (
+        <div className="modal-backdrop" onClick={()=>setShowGuide(false)}>
+          <div className="guide-modal" onClick={e=>e.stopPropagation()}>
+            <button className="modal-close icon-button" onClick={()=>setShowGuide(false)}><X size={18}/></button>
+            <div className="guide-icon"><MindtraceMark size={32}/></div>
+            <span className="eyebrow">MINDTRACE / GUÍA RÁPIDA</span>
+            <h2>Investigar es contrastar.</h2>
+            <p>Este laboratorio es una simulación académica. No representa un instrumento diagnóstico ni sustituye protocolos institucionales o asesoramiento profesional.</p>
+            <div className="guide-points">
+              <div><Check size={16}/><span>Comienza con preguntas abiertas y evita preguntas sugestivas.</span></div>
+              <div><Check size={16}/><span>Contrasta testimonios con fuentes independientes.</span></div>
+              <div><Check size={16}/><span>Registra la incertidumbre y las hipótesis alternativas.</span></div>
+              <div><Check size={16}/><span>No interpretes nerviosismo, apariencia o antecedentes como prueba de culpabilidad.</span></div>
+            </div>
+            <div className="guide-connection">
+              <div className={`connection-dot ${supabaseConfigured ? 'connected' : ''}`}/>
+              <div>
+                <strong>{supabaseConfigured ? 'Supabase detectado' : 'Supabase pendiente de configuración'}</strong>
+                <p>{supabaseConfigured ? 'La aplicación intentará sincronizar informes al guardarlos.' : 'Consulta README.md y supabase/schema.sql en el ZIP para conectar la base de datos.'}</p>
+              </div>
+            </div>
+            <button className="button-primary full-width" onClick={()=>setShowGuide(false)}>Entendido <Check size={16}/></button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

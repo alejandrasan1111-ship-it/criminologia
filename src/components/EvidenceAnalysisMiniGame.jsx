@@ -1,8 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Brain, ShieldCheck, Search, Check, Clock3, 
-  Target, Zap, Eye, Cpu, Microscope 
-} from 'lucide-react';
+import { Brain, Check, Zap, RotateCcw } from 'lucide-react';
 
 const miniGameData = {
   patternMatch: {
@@ -233,7 +230,7 @@ export default function EvidenceAnalysisMiniGame({ onComplete }) {
             <RotateCcw size={16} /> Reintentar
           </button>
         ) : (
-          <button className="button-secondary" onClick={() => setGameOver(true)}}>
+          <button className="button-secondary" onClick={() => setGameOver(true)}>
             <Check size={16} /> Finalizar y reclamar XP
           </button>
         )}
