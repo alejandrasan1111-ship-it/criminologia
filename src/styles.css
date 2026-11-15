@@ -600,3 +600,66 @@ button,input,textarea,select{max-width:100%}
 .personality-bar span{display:block;height:100%;border-radius:20px;background:linear-gradient(90deg,#00b4ff,#e61b2e)}
 .personality-trait p{margin:0;color:#aebfce;font-size:12px;line-height:1.65}
 @media(max-width:650px){.personality-scale{grid-template-columns:1fr;gap:7px}.personality-scale button{min-height:58px;flex-direction:row;justify-content:flex-start;text-align:left;padding:10px 13px}.personality-scale button span{flex:1}.personality-controls button{flex:1}}
+
+/* ===================== TABLERO DE ESCENA (sin WebGL) ===================== */
+.scene-board-photo{position:relative;min-height:420px;overflow:hidden;background:#0d1620}
+.scene-board-photo>img{width:100%;height:100%;object-fit:cover;display:block}
+.scene-board-photo::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(6,16,26,.55),rgba(6,16,26,.12) 38%,rgba(6,16,26,.78));pointer-events:none}
+.scene-pin{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:6px;background:none;border:0;padding:0;cursor:pointer;z-index:2}
+.scene-pin-dot{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font:600 12px 'DM Mono',monospace;color:#06131c;background:var(--pin-color,#35d9ff);box-shadow:0 0 0 4px rgba(6,19,28,.55),0 0 18px var(--pin-color,#35d9ff);transition:transform .15s}
+.scene-pin:hover .scene-pin-dot,.scene-pin.active .scene-pin-dot{transform:scale(1.15)}
+.scene-pin.found .scene-pin-dot{background:#4de68b;box-shadow:0 0 0 4px rgba(6,19,28,.55),0 0 18px #4de68b}
+.scene-pin-label{font:9px 'DM Mono',monospace;letter-spacing:.5px;color:#dceaf2;background:rgba(6,19,28,.85);border:1px solid rgba(120,190,220,.28);padding:3px 7px;border-radius:5px;white-space:nowrap;opacity:0;transform:translateY(-4px);transition:.15s;pointer-events:none}
+.scene-pin:hover .scene-pin-label,.scene-pin.active .scene-pin-label{opacity:1;transform:none}
+@media(max-width:760px){.scene-board-photo{min-height:300px;height:300px}.scene-pin-label{display:none}}
+
+/* ===================== MINI-JUEGOS FORENSES ===================== */
+.mini-game-section{display:flex;flex-direction:column;gap:14px;padding:18px;margin-top:16px;border:1px solid var(--line);border-radius:14px;background:linear-gradient(180deg,#132332,#0e1a26)}
+.game-header{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.game-header h2{margin:0;font-size:18px}
+.game-header p{margin:2px 0 0;font-size:12px;color:#93aebd}
+.game-icon{width:46px;height:46px;border-radius:12px;display:grid;place-items:center;background:rgba(53,217,255,.12);border:1px solid rgba(53,217,255,.3);color:#35d9ff;flex:none}
+.game-progress{margin-left:auto;display:flex;gap:10px;font:10px 'DM Mono',monospace;letter-spacing:.5px;color:#9fc0d0}
+.game-body{padding:4px 0}
+.game-instruction{margin:0 0 12px;font-size:13px;color:#cfe4ee}
+.game-instruction small{color:#8fa8b6}
+.pattern-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.pattern-cell{display:flex;align-items:center;gap:10px;padding:12px;border-radius:10px;border:1px solid var(--line);background:#0f1e2a;color:#dbe9f1;text-align:left;cursor:pointer;transition:.15s}
+.pattern-cell:hover:not(:disabled){border-color:#35d9ff;transform:translateY(-1px)}
+.pattern-cell.is-target{border-color:#4de68b}
+.pattern-cell:disabled{cursor:default;opacity:.92}
+.pattern-color{width:22px;height:22px;border-radius:6px;flex:none}
+.pattern-label{font-size:12px}
+.timeline-container{display:flex;flex-direction:column;gap:8px}
+.timeline-event{display:flex;justify-content:space-between;gap:10px;padding:11px 14px;border-radius:9px;border:1px solid var(--line);background:#0f1e2a;color:#dbe9f1;text-align:left;cursor:pointer;transition:.15s}
+.timeline-event:hover:not(:disabled){border-color:#35d9ff}
+.timeline-event.is-target{border-color:#4de68b}
+.timeline-time{font:10px 'DM Mono',monospace;color:#8fb8cc}
+.statements-list{display:flex;flex-direction:column;gap:10px}
+.statement-item{display:grid;grid-template-columns:auto 1fr auto;gap:8px 10px;align-items:center;padding:12px;border-radius:10px;border:1px solid var(--line);background:#0f1e2a;color:#dbe9f1;text-align:left;cursor:pointer;transition:.15s}
+.statement-item:hover:not(:disabled){border-color:#35d9ff}
+.statement-item.is-target{border-color:#4de68b}
+.statement-label{font:10px 'DM Mono',monospace;letter-spacing:.6px;color:#9fc0d0}
+.statement-text{font-size:12px;color:#9fb9c7}
+.consistency-bar{grid-column:1/-1;height:6px;border-radius:3px;background:#172836;overflow:hidden}
+.consistency-fill{height:100%;background:linear-gradient(90deg,#35d9ff,#4de68b)}
+.consistency-percent{font:10px 'DM Mono',monospace;color:#9fc0d0}
+.game-footer{display:flex;justify-content:center;min-height:24px}
+.game-feedback{display:flex;align-items:center;gap:6px;font:10px 'DM Mono',monospace;letter-spacing:.5px;color:#8fa8b6}
+.game-feedback.ok{color:#4de68b}
+.game-feedback.ko{color:#ff6b7a}
+.game-picker{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.game-pick-card{display:flex;flex-direction:column;gap:6px;padding:16px;border-radius:12px;border:1px solid var(--line);background:#0f1e2a;color:#dbe9f1;text-align:left;cursor:pointer;transition:.15s}
+.game-pick-card:hover{border-color:#35d9ff;transform:translateY(-2px)}
+.game-pick-card strong{font-size:14px}
+.game-pick-card p{margin:0;font-size:11px;color:#8fa8b6}
+.game-pick-difficulty{align-self:flex-start;font:9px 'DM Mono',monospace;letter-spacing:.6px;color:#35d9ff;border:1px solid rgba(53,217,255,.35);padding:2px 7px;border-radius:999px}
+.game-pick-meta{margin-top:4px;font:9px 'DM Mono',monospace;color:#7f97a5}
+.game-over-content{display:flex;flex-direction:column;align-items:center;gap:8px;padding:26px;text-align:center}
+.game-over-title{font:11px 'DM Mono',monospace;letter-spacing:2px;color:#35d9ff}
+.game-over-score{display:flex;align-items:baseline;gap:6px}
+.score-value{font-size:44px;font-weight:700;color:#e9f4fa}
+.score-unit{font:12px 'DM Mono',monospace;color:#8fa8b6}
+.game-over-message{margin:0;max-width:430px;font-size:12px;color:#93aebd}
+.game-over-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:6px}
+.mini-game-btn{margin-top:10px}

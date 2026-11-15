@@ -9,7 +9,7 @@ import { scenarios, difficulties } from './data/scenarios.js';
 import { extendedInterviewQuestions } from './data/interviewQuestions.js';
 import { advancedQuestions, behavioralProfileQuestions } from './data/advancedQuestions.js';
 import { questionBank } from './data/questionBank.js';
-import Scene3D from './components/Scene3D.jsx';
+import SceneBoard from './components/SceneBoard.jsx';
 import { MbtiTest, PersonalityTest } from './components/ForensicTests.jsx';
 import EvidenceAnalysisMiniGame from './components/EvidenceAnalysisMiniGame.jsx';
 import { supabaseConfigured, saveProgress, loadProgress } from './lib/supabase.js';
@@ -68,33 +68,37 @@ const AudioManager = {
     
     this.ambienceLFO = this.context.createOscillator();
     this.lfoGain = this.context.createGain();
-    this.lfoGain.gain.value = 0.5;
-    this.lfoGain.connect(this.ambienceGain.frequency);
+    this.lfoGain.gain.value = 0.02;
+    // Solo se puede modular un AudioParam existente (gain), nunca un GainNode completo.
     this.lfoGain.connect(this.ambienceGain.gain);
     this.ambienceLFO.type = 'triangle';
     this.ambienceLFO.frequency.value = 0.15;
     this.ambienceLFO.start();
     
     this.ambienceSource.start();
-    this.isPlaying = true;
+    this.isPlaying = false;
   },
   
   toggle() {
-    if (!this.context) this.init();
+    if (!this.context) {
+      try { this.init(); } catch (e) { return; }
+    }
     if (!this.isPlaying) {
       if (this.context.state === 'suspended') {
-        this.context.resume().then(() => {});
+        this.context.resume().catch(() => {});
       }
-      this.ambienceSource.start();
+      this.masterGain.gain.value = 0.15;
       this.isPlaying = true;
     } else {
-      this.ambienceSource.stop();
+      this.masterGain.gain.value = 0;
       this.isPlaying = false;
     }
   },
   
   playConfirmation(tone = 'success') {
-    if (!this.context) this.init();
+    if (!this.context) {
+      try { this.init(); } catch (e) { return; }
+    }
     try {
       const osc = this.context.createOscillator();
       const gain = this.context.createGain();
@@ -106,11 +110,12 @@ const AudioManager = {
       gain.connect(this.masterGain);
       osc.start();
       gain.gain.setTargetAtTime(0, this.context.currentTime + 0.3, 0.1);
-      osc.stop();
+      osc.stop(this.context.currentTime + 0.8);
     } catch (e) { /* muted context */ }
   }
 };
-AudioManager.init();
+// El audio es opcional: si el navegador lo bloquea, la app debe cargar igual.
+try { AudioManager.init(); } catch (e) { console.warn('Audio ambiente no disponible:', e.message); }
 
 // Store system for game progress
 const store = {
@@ -128,17 +133,25 @@ const store = {
     hypothesis: '', sessionScore: 0, decisions: [], 
     discovered: [], profile: { title: 'Sin perfil', color: '#94A3B8' }
   },
-  incrementXP(amount) {
-    this.xp = (this.xp || 0) + amount;
-    const levels = [0, 1000, 2500, 5000, 8000];
-    let newLevel = 1;
-    for (let i = levels.length - 1; i >= 0; i--) {
-      if (this.xp >= levels[i]) newLevel = i + 1;
+  get xp() { return Number(this.state.xp) || 0; },
+  get level() { return Number(this.state.level) || 1; },
+  incrementXP(amount = 0) {
+    const current = this.state;
+    const xp = (Number(current.xp) || 0) + Number(amount || 0);
+    const thresholds = [0, 1000, 2500, 5000, 8000];
+    let level = 1;
+    for (let i = thresholds.length - 1; i >= 0; i--) {
+      if (xp >= thresholds[i]) { level = i + 1; break; }
     }
-    this.level = Math.min(newLevel, 5);
-    this.state.xp = this.xp;
-    this.state.level = this.level;
-    this.state = { ...this.state };
+    this.state = { ...current, xp, level: Math.min(level, 5) };
+  },
+  // Guarda cada decisión para construir el perfil del investigador a lo largo del tiempo.
+  addDecision(record) {
+    const current = this.state;
+    const list = Array.isArray(current.decisions) ? current.decisions : [];
+    const next = [...list, record].slice(-200);
+    this.state = { ...current, decisions: next };
+    return next;
   }
 };
 function saveLocal(record) {
@@ -165,7 +178,7 @@ function calculateProfile(decisions = []) {
     Organizado: counts.planificacion ? percentages.planificacion : 0,
     Reactivo: counts.impulsividad ? percentages.impulsividad : 0,
     Manipulador: counts.manipulacion ? percentages.manipulacion : 0,
-    Observador: counts.length > 0 ? Math.round(100 - (percentages.planificacion + percentages.impulsividad + percentages.manipulacion) / 3) : 0
+    Observador: decisions.length > 0 ? Math.max(0, Math.round(100 - (percentages.planificacion + percentages.impulsividad + percentages.manipulacion) / 3)) : 0
   };
   const ranked = Object.entries(profileScores).sort((a, b) => b[1] - a[1]);
   const topTrait = ranked[0];
@@ -186,9 +199,6 @@ function calculateProfile(decisions = []) {
     Observador: '#35D9FF',
     Indeciso: '#FFD700'
   };
-  
-  // Ganar XP por completar perfil
-  if (store) store.incrementXP(10);
   
   return { title, description: descriptions[title], color: colors[title], sums, counts, percentages, profileScores, topTrait };
 }
@@ -331,6 +341,7 @@ export default function App() {
   const [questionIndex, setQuestionIndex] = useState(0);
   const [optionShuffleSeed, setOptionShuffleSeed] = useState(() => Math.floor(Math.random() * 0xFFFFFFFF));
   const [decisions, setDecisions] = useState([]);
+  const [allDecisions, setAllDecisions] = useState(() => (store.state.decisions || []));
   const [discovered, setDiscovered] = useState([]);
   const [activeEvidence, setActiveEvidence] = useState(null);
   const [hypothesis, setHypothesis] = useState('');
@@ -353,18 +364,11 @@ export default function App() {
   const filteredBank = useMemo(() => questionBank.filter(q => bankFilter === 'Todas' || q.category === bankFilter), [bankFilter]);
   const bankQuestion = filteredBank[Math.min(bankIndex, filteredBank.length - 1)];
   
-  // Sync store with React state on mount
+  // Hidrata el perfil acumulado y la exploración desde el almacenamiento local
   useEffect(() => {
     const saved = store.state;
-    if (saved.cases !== undefined) store.cases = saved.cases;
-    if (saved.score !== undefined) store.score = saved.score;
-    if (saved.discoveries !== undefined) store.discoveries = saved.discoveries;
-    if (saved.xp !== undefined) store.xp = saved.xp;
-    if (saved.level !== undefined) store.level = saved.level;
-    store.history = saved.history || [];
+    setAllDecisions(Array.isArray(saved.decisions) ? saved.decisions : []);
     if (saved.hypothesis) setHypothesis(saved.hypothesis);
-    if (saved.sessionScore) setSessionScore(saved.sessionScore);
-    if (Array.isArray(saved.decisions) && saved.decisions.length) setDecisions(saved.decisions);
     if (Array.isArray(saved.discovered) && saved.discovered.length) setDiscovered(saved.discovered);
   }, []);
 
@@ -395,7 +399,7 @@ export default function App() {
   const totalScore = history.reduce((sum, item) => sum + (item.score || 0), 0);
   const avgScore = history.length ? Math.round(totalScore / history.length) : 0;
   const currentRank = LEVELS.indexOf(difficulty) + 1;
-  const profileReport = calculateProfile(decisions);
+  const profileReport = calculateProfile(allDecisions);
 
   useEffect(() => {
     if (supabaseConfigured) loadProgress().then(setRemoteHistory).catch(() => {});
@@ -415,6 +419,7 @@ export default function App() {
     store.incrementXP(isCorrect ? 5 : 2); // Small XP for attempting, bonus for correct
     const record = { question: question.prompt, answer: option.text, score: option.score, feedback: option.feedback, principle: option.principle, trait };
     setDecisions(prev => [...prev, record]);
+    setAllDecisions(store.addDecision(record));
     setSessionScore(prev => prev + option.score);
     setFeedback(option);
   };
@@ -485,12 +490,12 @@ export default function App() {
         <header className="topbar">
           <div className="topbar-left">
             <button className="mobile-menu icon-button" onClick={()=>setShowMobileMenu(v=>!v)}><Menu size={20}/></button>
-            <div className="breadcrumbs"><span>ACADEMIA</span><ChevronRight size={13}/><strong>{({home:'PANEL PRINCIPAL',scenarios:'CASOS DE ESTUDIO',questionBank:'BANCO DE PREGUNTAS',case:'SIMULACIÓN ACTIVA',scene:'ESCENA 3D',report:'INFORME DE CASO',progress:'MI PROGRESO',bwModule:'VENTANAS ROTAS & PSICOPATÍA',mbti:'TEST MBTI FORENSE'})[page] || 'MINDTRACE'}</strong></div>
+            <div className="breadcrumbs"><span>ACADEMIA</span><ChevronRight size={13}/><strong>{({home:'PANEL PRINCIPAL',scenarios:'CASOS DE ESTUDIO',questionBank:'BANCO DE PREGUNTAS',case:'SIMULACIÓN ACTIVA',scene:'INSPECCIÓN DE ESCENA',report:'INFORME DE CASO',progress:'MI PROGRESO',bwModule:'VENTANAS ROTAS & PSICOPATÍA',mbti:'TEST MBTI FORENSE'})[page] || 'MINDTRACE'}</strong></div>
           </div>
           <div className="topbar-right">
           <button className={`audio-toggle-btn ${AudioManager.isPlaying?'audio-active':''}`} onClick={AudioManager.toggle}>
             <span>{AudioManager.isPlaying ? <Volume2 size={16}/> : <VolumeX size={16}/>}</span>
-            <span>{AudioManager.isPlaying ? 'SILENCiar' : 'ATMÓSFERA'}</span>
+            <span>{AudioManager.isPlaying ? 'SILENCIAR' : 'ATMÓSFERA'}</span>
           </button>
           <MysteryAudioControl/><span className="status-pill"><span/> SIMULACIÓN EDUCATIVA</span><div className="avatar">MT</div></div>
         </header>
@@ -533,7 +538,7 @@ export default function App() {
             <div className="landing-feature-grid">
               <button className="landing-feature" onClick={()=>go('scenarios')}><span className="landing-feature-image feature-cases"/><b>CASOS DE ESTUDIO</b><small>Investiga escenarios basados en la realidad forense.</small><i><ArrowRight size={15}/></i></button>
               <button className="landing-feature" onClick={()=>{setBankIndex(0);setBankAnswer(null);go('questionBank')}}><span className="landing-feature-image feature-bank"/><b>BANCO DE PREGUNTAS</b><small>Pon a prueba tus conocimientos y razonamiento.</small><i><ArrowRight size={15}/></i></button>
-              <button className="landing-feature" onClick={()=>go('scene')}><span className="landing-feature-image feature-scene"/><b>SIMULACIÓN 3D</b><small>Explora escenas interactivas y toma decisiones clave.</small><i><ArrowRight size={15}/></i></button>
+              <button className="landing-feature" onClick={()=>go('scene')}><span className="landing-feature-image feature-scene"/><b>INSPECCIÓN DE ESCENA</b><small>Explora escenas interactivas y toma decisiones clave.</small><i><ArrowRight size={15}/></i></button>
               <button className="landing-feature" onClick={()=>go('progress')}><span className="landing-feature-image feature-progress"/><b>TU PROGRESO</b><small>Sigue tu evolución y desbloquea nuevos desafíos.</small><i><ArrowRight size={15}/></i></button>
             </div>
           </section>
@@ -593,7 +598,7 @@ export default function App() {
                 <div className="game-answer-heading"><span className="eyebrow">SELECCIONA UNA RESPUESTA</span><span>4 ALTERNATIVAS</span></div>
                 <div className="answer-options">{displayedOptions.map((o,i)=><button key={o.text} disabled={!!feedback} className={`answer-option ${feedback===o?'chosen':''}`} onClick={()=>chooseOption(o)}><span className="answer-option-letter">{String.fromCharCode(65+i)}</span><span className="answer-option-text">{o.text}</span><ChevronRight size={17}/></button>)}</div>
                 {feedback&&<div className={`game-feedback-box ${feedback.score>=8?'correct':feedback.score<=2?'incorrect':'consider'}`}><div className="game-feedback-heading"><span>{feedback.score>=8?<Check size={17}/>:<CircleHelp size={17}/>}</span><div><strong>{feedback.score>=8?'ANÁLISIS CONSISTENTE':feedback.score<=2?'REQUIERE REVISIÓN':'ALTERNATIVA A CONSIDERAR'}</strong><small>VALORACIÓN: {feedback.score}/10 · {feedback.principle.toUpperCase()}</small></div></div><p>{feedback.feedback}</p><button className="button-primary compact" onClick={nextQuestion}>{questionIndex+1<scenario.questions.length?'SIGUIENTE PREGUNTA':'VER INFORME'} <ArrowRight size={15}/></button></div>}
-                <div className="game-question-actions"><button className="button-secondary" onClick={()=>go('scenarios')}><ArrowLeft size={15}/> VOLVER A CASOS</button><button className="game-scene-button" onClick={()=>go('scene')}><FlaskConical size={15}/> ABRIR ESCENA 3D <ArrowRight size={15}/></button></div>
+                <div className="game-question-actions"><button className="button-secondary" onClick={()=>go('scenarios')}><ArrowLeft size={15}/> VOLVER A CASOS</button><button className="game-scene-button" onClick={()=>go('scene')}><FlaskConical size={15}/> ABRIR ESCENA <ArrowRight size={15}/></button></div>
               </article>
               <div className="game-ethics-footer"><LockKeyhole size={14}/><span>SIMULACIÓN EDUCATIVA · La evidencia orienta hipótesis, pero no determina culpabilidad por sí sola.</span></div>
             </main>
@@ -605,7 +610,7 @@ export default function App() {
           <div className="page-heading scene-heading"><div><span className="eyebrow">INSPECCIÓN DIGITAL / EXPEDIENTE {scenario.number}</span><h1>Escena explorable<span>.</span></h1><p>Observa el entorno, abre los marcadores y registra qué evidencia merece corroboración.</p></div><div className="scene-score"><span>INSPECCIÓN</span><strong>{discovered.length}<small>/{scenario.scene.hotspots.length}</small></strong></div></div>
           <div className="scene-case-strip"><div className="scene-case-icon"><FlaskConical size={20}/></div><div><span className="eyebrow">{scenario.category}</span><strong>{scenario.title}</strong></div><span className="scene-strip-level">{difficulty.toUpperCase()}</span></div>
                     <div className="scene-reference-image"><img src={scenario.image} alt={`Referencia visual: ${scenario.title}`} /><div><span className="eyebrow">REFERENCIA FOTOGRÁFICA</span><strong>{scenario.title}</strong><p>Usa esta imagen como contexto visual; verifica los indicios en la escena interactiva y no des por probada una hipótesis solo por la fotografía.</p></div></div>
-          <Scene3D scene={scenario.scene} image={scenario.image} caseTitle={scenario.title} discovered={discovered} onDiscover={discover}/>
+          <SceneBoard scene={scenario.scene} image={scenario.image} caseTitle={scenario.title} discovered={discovered} onDiscover={discover}/>
           <div className="scene-footer-note"><ShieldCheck size={17}/><p>Las pistas de la escena son indicios para orientar la investigación, no pruebas concluyentes. Documenta qué observaste y qué necesitarías verificar.</p><button className="button-primary compact" onClick={()=>go('case')}>Volver al caso <ArrowRight size={15}/></button></div>
         </section>}
 
@@ -642,13 +647,38 @@ export default function App() {
             <div className="stat-card"><div className="stat-top"><span>REGISTROS REMOTOS</span><Activity size={17}/></div><strong>{remoteHistory.length.toString().padStart(2,'0')}</strong><small>{supabaseConfigured?'Sincronizados con Supabase':'Conecta Supabase para sincronizar'}</small></div>
             <div className="stat-card"><div className="stat-top"><span>NIVEL INVESTIGADOR</span><div className="hud-bar-container" style={{height:'8px',borderRadius:'4px',overflow:'hidden'}}><i className="hud-bar-fill" style={{width:`${(store.level||1)/5*100}%`, background:'linear-gradient(90deg,#35d9ff,#00b4ff)', height:'100%'}}/></div></div><small>XP: {store.xp||0}</small></div>
           </div>
+          <section className="profile-report-card progress-profile-card">
+            <span className="eyebrow">MINDTRACE / PERFIL DEL INVESTIGADOR</span>
+            <h3>Tu huella psicológica</h3>
+            {allDecisions.length === 0 ? (
+              <p>Resuelve un caso o completa un entrenamiento forense. El sistema irá perfilando tu forma de investigar con cada decisión que tomes.</p>
+            ) : (
+              <>
+                <strong className="profile-title" style={{color:profileReport.color}}>{profileReport.title}</strong>
+                <p>{profileReport.description}</p>
+                <div className="profile-hud-metric"><div><span>Nivel de planificación</span><b>{profileReport.percentages.planificacion}%</b></div><div className="hud-bar-container"><i className="hud-bar-fill" style={{width:profileReport.percentages.planificacion+'%','--hud-color':'#00B4FF'}}/></div></div>
+                <div className="profile-hud-metric"><div><span>Nivel de empatía</span><b>{profileReport.percentages.empatia}%</b></div><div className="hud-bar-container"><i className="hud-bar-fill" style={{width:profileReport.percentages.empatia+'%','--hud-color':'#E61B2E'}}/></div></div>
+                <div className="profile-hud-metric"><div><span>Control de impulsos</span><b>{100-profileReport.percentages.impulsividad}%</b></div><div className="hud-bar-container"><i className="hud-bar-fill" style={{width:(100-profileReport.percentages.impulsividad)+'%','--hud-color':'#FFD700'}}/></div></div>
+                <div className="profile-hud-metric"><div><span>Atención al detalle</span><b>{profileReport.percentages.memoria}%</b></div><div className="hud-bar-container"><i className="hud-bar-fill" style={{width:profileReport.percentages.memoria+'%','--hud-color':'#35D9FF'}}/></div></div>
+                <small className="profile-note">{allDecisions.length} {allDecisions.length === 1 ? 'decisión registrada' : 'decisiones registradas'} · el perfil se recalcula con cada caso y cada entrenamiento.</small>
+              </>
+            )}
+          </section>
           <div className="panel-card history-card"><div className="panel-title"><div className="panel-icon"><Clock3 size={18}/></div><div><span className="eyebrow">HISTORIAL</span><h3>Últimas investigaciones</h3></div></div>{history.length===0?<div className="empty-state"><div><ClipboardList size={26}/></div><strong>Aún no hay casos completados</strong><p>Inicia un expediente y guarda tu primer informe.</p><button className="button-primary compact" onClick={()=>go('scenarios')}>Explorar casos <ArrowRight size={15}/></button></div>:<div className="history-list">{history.map(item=><div className="history-row" key={item.id}><div className="history-icon"><MindtraceMark size={22}/></div><div className="history-name"><strong>{item.scenarioTitle||scenarios.find(s=>s.id===item.scenarioId)?.title||item.scenarioId}</strong><small>{item.difficulty} · {new Date(item.completedAt).toLocaleDateString('es-ES')}</small></div><div className="history-score"><strong>{item.score}</strong><small>/100</small></div><button className="icon-button" onClick={()=>startCase(item.scenarioId)} title="Repetir caso"><RotateCcw size={16}/></button></div>)}</div>}</div>
           <div className="mini-game-btn-container">
             <button className="button-primary mini-game-btn" onClick={()=>setMiniGameType('patternMatch')}>
               <Microscope size={16} /> Análisis Forense Mini-juego
             </button>
           </div>
-          {miniGameType && <EvidenceAnalysisMiniGame onComplete={()=>setMiniGameType(null)} />}
+          {miniGameType && <EvidenceAnalysisMiniGame onClose={()=>setMiniGameType(null)} onComplete={(xp, max)=>{
+            if (xp) store.incrementXP(xp);
+            const ratio = max ? xp / max : 0;
+            const trait = ratio >= 0.8 ? 'planificacion' : ratio >= 0.5 ? 'memoria' : 'impulsividad';
+            setAllDecisions(store.addDecision({
+              question: 'Entrenamiento forense', answer: miniGameType,
+              score: Math.round(ratio * 10), trait
+            }));
+          }} />}
           {supabaseConfigured && <div className="panel-card remote-card"><div className="panel-title"><div className="panel-icon"><ShieldCheck size={18}/></div><div><span className="eyebrow">SUPABASE</span><h3>Progreso sincronizado</h3></div><button className="text-button" onClick={()=>loadProgress().then(setRemoteHistory).catch(e=>notify(e.message))}>Actualizar <RotateCcw size={14}/></button></div>{remoteHistory.length?<div className="history-list">{remoteHistory.map(item=><div className="history-row" key={item.id}><div className="history-icon"><Activity size={18}/></div><div className="history-name"><strong>{scenarios.find(s=>s.id===item.scenario_id)?.title||item.scenario_id}</strong><small>{item.difficulty} · {new Date(item.created_at).toLocaleDateString('es-ES')}</small></div><div className="history-score"><strong>{item.score}</strong><small>/100</small></div></div>)}</div>:<p className="muted">Cuando guardes un informe autenticado, aparecerá aquí.</p>}</div>}
         </section>}
 
