@@ -160,10 +160,16 @@ function saveLocal(record) {
 }
 function getLevel(rank) { return difficulties.find(d => d.rank === rank) || difficulties[0]; }
 // Rasgo que entrena cada decisión: si la opción no lo trae, se deduce de la calidad del razonamiento.
-function inferTrait(score) {
-  const value = Number(score) || 0;
-  if (value >= 8) return 'planificacion';   // rigor y método
-  if (value >= 5) return 'memoria';         // contraste y detalle
+// Las tácticas de presión, presunción de culpa o exposición pública marcan el perfil Manipulador.
+const COERCIVE = /(miente|ocultas|culpable|demuestra que|confirma que|acusa|presion|oblig|amenaz|exige|insiste|publicar|difund|senala a|creen que|capaces de|ya decidi|envenen|te conviene|dile que|sugiere que|hazle saber|admita|confiese)/;
+function inferTrait(option) {
+  const score = Number(option?.score) || 0;
+  const text = String(option?.text || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  // Solo las respuestas débiles o incorrectas pueden ser coercitivas: una buena práctica nunca lo es.
+  if (score <= 3 && COERCIVE.test(text)) return 'manipulacion';
+  if (score >= 8) return 'planificacion';   // rigor y método
+  if (score >= 5) return 'memoria';         // contraste y detalle
   return 'impulsividad';                    // conclusión precipitada
 }
 function calculateProfile(decisions = []) {
@@ -183,6 +189,10 @@ function calculateProfile(decisions = []) {
   percentages.impulsividad = counts.impulsividad
     ? Math.max(0, Math.round(100 - (sums.impulsividad / counts.impulsividad) * 10))
     : 0;
+  // La manipulación también: usar presión, presunción o exposición pública ES la señal.
+  percentages.manipulacion = counts.manipulacion
+    ? Math.max(0, Math.round(100 - (sums.manipulacion / counts.manipulacion) * 10))
+    : 0;
 
   // Determinar perfil psicológico basado en decisiones acumuladas
   const profileScores = {
@@ -196,7 +206,7 @@ function calculateProfile(decisions = []) {
   const topTrait = ranked[0];
   const hasEvidence = topTrait[1] >= 55;
   // Perfil integral: quien entrena (o investiga) de forma equilibrada en las cuatro dimensiones.
-  const balance = [percentages.planificacion, percentages.empatia, percentages.memoria, 100 - percentages.impulsividad];
+  const balance = [percentages.planificacion, percentages.empatia, percentages.memoria, 100 - percentages.impulsividad, 100 - percentages.manipulacion];
   const integral = decisions.length >= 3 && balance.every(value => value >= 70);
   const baseName = integral ? 'Integral' : hasEvidence ? topTrait[0] : 'Indeciso';
   const suffix = integral ? ' (Equilibrado)' : hasEvidence && topTrait[1] >= 80 ? ' (Dominante)' : hasEvidence && topTrait[1] >= 65 ? ' (Fuerte)' : '';
@@ -438,7 +448,7 @@ export default function App() {
     const { trait = null } = option;
     const isCorrect = option.score >= 8; // Scores 8-10 are correct
     store.incrementXP(isCorrect ? 5 : 2); // Small XP for attempting, bonus for correct
-    const record = { question: question.prompt, answer: option.text, score: option.score, feedback: option.feedback, principle: option.principle, trait: trait || inferTrait(option.score) };
+    const record = { question: question.prompt, answer: option.text, score: option.score, feedback: option.feedback, principle: option.principle, trait: trait || inferTrait(option) };
     setDecisions(prev => [...prev, record]);
     setAllDecisions(store.addDecision(record));
     setSessionScore(prev => prev + option.score);
@@ -681,6 +691,7 @@ export default function App() {
                 <div className="profile-hud-metric"><div><span>Nivel de empatía</span><b>{profileReport.percentages.empatia}%</b></div><div className="hud-bar-container"><i className="hud-bar-fill" style={{width:profileReport.percentages.empatia+'%','--hud-color':'#E61B2E'}}/></div></div>
                 <div className="profile-hud-metric"><div><span>Control de impulsos</span><b>{100-profileReport.percentages.impulsividad}%</b></div><div className="hud-bar-container"><i className="hud-bar-fill" style={{width:(100-profileReport.percentages.impulsividad)+'%','--hud-color':'#FFD700'}}/></div></div>
                 <div className="profile-hud-metric"><div><span>Atención al detalle</span><b>{profileReport.percentages.memoria}%</b></div><div className="hud-bar-container"><i className="hud-bar-fill" style={{width:profileReport.percentages.memoria+'%','--hud-color':'#35D9FF'}}/></div></div>
+                <div className="profile-hud-metric"><div><span>Tendencia a influir o presionar</span><b>{profileReport.percentages.manipulacion}%</b></div><div className="hud-bar-container"><i className="hud-bar-fill" style={{width:profileReport.percentages.manipulacion+'%','--hud-color':'#E61B2E'}}/></div></div>
                 <small className="profile-note">{allDecisions.length} {allDecisions.length === 1 ? 'decisión registrada' : 'decisiones registradas'} · el perfil se recalcula con cada caso y cada entrenamiento.</small>
               </>
             )}

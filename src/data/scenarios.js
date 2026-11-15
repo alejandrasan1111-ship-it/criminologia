@@ -31,7 +31,7 @@ export const scenarios = [
     questions: [
       { prompt: '¿Cómo iniciarías la entrevista?', options: [
         { text: 'Cuéntame, paso a paso, cómo terminó tu jornada y qué hiciste después.', score: 10, feedback: 'Excelente inicio: permite una narración libre antes de introducir información que pueda condicionar el recuerdo.', principle: 'Narración libre' },
-        { text: 'El registro demuestra que mientes. ¿Por qué regresaste?', score: 2, feedback: 'La pregunta presupone una mentira y confunde el uso de una tarjeta con la presencia de su titular.', principle: 'Evitar presuposiciones' },
+        { text: 'El registro demuestra que mientes. ¿Por qué regresaste?', score: 2, trait: 'manipulacion', feedback: 'La pregunta presupone una mentira y confunde el uso de una tarjeta con la presencia de su titular.', principle: 'Evitar presuposiciones' },
         { text: '¿Estabas nervioso cuando saliste?', score: 1, feedback: 'El nerviosismo no permite inferir engaño. La pregunta tampoco reconstruye la cronología.', principle: 'Evitar inferencias débiles' },
         { text: 'El registro marca 22:13. ¿Cómo explicas esa diferencia con tu recuerdo?', score: 8, feedback: 'Es pertinente contrastar la diferencia, aunque conviene recoger primero el relato espontáneo.', principle: 'Contraste contextualizado' }
       ] , image: '/images/case-corporate.png'},
@@ -39,7 +39,7 @@ export const scenarios = [
         { text: 'Tratarlo como prueba concluyente de que Martín estuvo allí.', score: 1, feedback: 'El registro confirma el uso de la tarjeta, no la identidad de quien la utilizó.', principle: 'Valorar límites de evidencia' },
         { text: 'Verificar cámaras, registros complementarios y posibles accesos compartidos.', score: 10, feedback: 'Correcto: buscas corroboración independiente y consideras explicaciones alternativas.', principle: 'Corroboración' },
         { text: 'Descartarlo porque Martín niega haber regresado.', score: 2, feedback: 'Una declaración no elimina evidencia documental; ambas fuentes deben examinarse.', principle: 'Contraste de fuentes' },
-        { text: 'Preguntar a todos si creen que Martín es honesto.', score: 3, feedback: 'La reputación percibida no sustituye la comprobación de hechos específicos.', principle: 'Evitar sesgo de reputación' }
+        { text: 'Preguntar a todos si creen que Martín es honesto.', score: 3, trait: 'manipulacion', feedback: 'La reputación percibida no sustituye la comprobación de hechos específicos.', principle: 'Evitar sesgo de reputación' }
       ] , image: '/images/case-corporate.png'},
       { prompt: '¿Cuál es la conclusión provisional más sólida?', options: [
         { text: 'Martín mintió y es responsable del incidente.', score: 0, feedback: 'La información disponible no prueba mentira ni responsabilidad.', principle: 'No concluir prematuramente' },
@@ -82,7 +82,7 @@ export const scenarios = [
     questions: [
       { prompt: '¿Qué preguntarías primero a la directora financiera?', options: [
         { text: '¿Quién autorizó el pago y qué registros documentan cada etapa?', score: 10, feedback: 'Pregunta concreta, verificable y centrada en el flujo de decisión.', principle: 'Trazabilidad' },
-        { text: '¿Por qué permitió que su equipo robara dinero?', score: 0, feedback: 'Presupone delito y responsabilidad antes de revisar los hechos.', principle: 'Presunción y neutralidad' },
+        { text: '¿Por qué permitió que su equipo robara dinero?', score: 0, trait: 'manipulacion', feedback: 'Presupone delito y responsabilidad antes de revisar los hechos.', principle: 'Presunción y neutralidad' },
         { text: '¿Se considera una persona honesta?', score: 2, feedback: 'La autopercepción moral no permite reconstruir el proceso de aprobación.', principle: 'Preguntas relevantes' },
         { text: '¿Quién le cae mal dentro de la empresa?', score: 1, feedback: 'Puede introducir rumores y conflictos personales sin conexión probatoria.', principle: 'Evitar sesgo de confirmación' }
       ] , image: '/images/case-environment.png'},
@@ -94,7 +94,7 @@ export const scenarios = [
       ] , image: '/images/mindtrace-case-overview.png'},
       { prompt: '¿Cómo describirías la hipótesis principal?', options: [
         { text: 'Hay indicios de una posible falla de control y pagos duplicados; falta atribuir responsabilidades con evidencia.', score: 10, feedback: 'Distingue el hecho financiero de la atribución individual y mantiene abiertas alternativas.', principle: 'Hipótesis verificable' },
-        { text: 'La directora financiera es culpable porque ocupa el cargo.', score: 0, feedback: 'El cargo no demuestra participación ni conocimiento.', principle: 'No atribuir por jerarquía' },
+        { text: 'La directora financiera es culpable porque ocupa el cargo.', score: 0, trait: 'manipulacion', feedback: 'El cargo no demuestra participación ni conocimiento.', principle: 'No atribuir por jerarquía' },
         { text: 'Toda excepción de política es fraude.', score: 1, feedback: 'Una excepción puede ser irregular, autorizada o fraudulenta; necesita contexto.', principle: 'Diferenciar irregularidad y delito' },
         { text: 'No existe caso si no hay confesión.', score: 1, feedback: 'Los registros y evidencias independientes pueden sustentar la investigación.', principle: 'Evidencia independiente' }
       ] , image: '/images/case-interview.png'}
@@ -133,20 +133,20 @@ export const scenarios = [
     questions: [
       { prompt: '¿Cómo abordarías a la testigo?', options: [
         { text: 'Pídele que describa lo que vio y diferencie observación directa de lo que escuchó.', score: 10, feedback: 'Permite distinguir experiencia directa, inferencias y rumores.', principle: 'Calidad testimonial' },
-        { text: 'Confirma que el joven conocido por conflictos fue el agresor.', score: 0, feedback: 'La pregunta es sugestiva y se apoya en reputación previa.', principle: 'Evitar sesgo de confirmación' },
-        { text: 'Pregunta si los vecinos lo consideran peligroso.', score: 2, feedback: 'La opinión comunitaria no sustituye hechos observados.', principle: 'Evitar etiquetamiento' },
+        { text: 'Confirma que el joven conocido por conflictos fue el agresor.', score: 0, trait: 'manipulacion', feedback: 'La pregunta es sugestiva y se apoya en reputación previa.', principle: 'Evitar sesgo de confirmación' },
+        { text: 'Pregunta si los vecinos lo consideran peligroso.', score: 2, trait: 'manipulacion', feedback: 'La opinión comunitaria no sustituye hechos observados.', principle: 'Evitar etiquetamiento' },
         { text: 'Descarta a todos los vecinos porque hay rumores.', score: 2, feedback: 'La información debe evaluarse por fuente y calidad, no descartarse en bloque.', principle: 'Evaluación crítica' }
       ] , image: '/images/case-corporate.png'},
       { prompt: '¿Qué acción ayuda a comprender el conflicto?', options: [
         { text: 'Mapear relaciones, cronología y disputas concretas, contrastándolo con entrevistas individuales.', score: 10, feedback: 'Integra el contexto social sin convertirlo en prueba de culpabilidad.', principle: 'Análisis contextual' },
-        { text: 'Asumir que el grupo con peor reputación inició la agresión.', score: 0, feedback: 'La reputación colectiva puede reforzar prejuicios y errores de atribución.', principle: 'Evitar estigmatización' },
-        { text: 'Publicar los nombres de los sospechosos para que la comunidad opine.', score: 0, feedback: 'Puede poner en riesgo a personas y contaminar testimonios.', principle: 'Confidencialidad y protección' },
+        { text: 'Asumir que el grupo con peor reputación inició la agresión.', score: 0, trait: 'manipulacion', feedback: 'La reputación colectiva puede reforzar prejuicios y errores de atribución.', principle: 'Evitar estigmatización' },
+        { text: 'Publicar los nombres de los sospechosos para que la comunidad opine.', score: 0, trait: 'manipulacion', feedback: 'Puede poner en riesgo a personas y contaminar testimonios.', principle: 'Confidencialidad y protección' },
         { text: 'Elegir la versión más repetida.', score: 1, feedback: 'La repetición no equivale a corroboración independiente.', principle: 'Independencia de fuentes' }
       ] , image: '/images/case-community.png'},
       { prompt: '¿Qué conclusión provisional es más responsable?', options: [
         { text: 'Existe un conflicto comunitario y un daño documentado; la autoría requiere evidencia adicional.', score: 10, feedback: 'Separa hechos confirmados de atribución pendiente y abre vías de prevención.', principle: 'Conclusión proporcional' },
-        { text: 'La comunidad ya decidió quién fue, así que no hace falta investigar.', score: 0, feedback: 'La presión social no sustituye una investigación imparcial.', principle: 'Imparcialidad' },
-        { text: 'Los antecedentes del joven prueban que actuó igual esta vez.', score: 0, feedback: 'El comportamiento pasado no prueba automáticamente un hecho nuevo.', principle: 'Evitar inferencia por antecedentes' },
+        { text: 'La comunidad ya decidió quién fue, así que no hace falta investigar.', score: 0, trait: 'manipulacion', feedback: 'La presión social no sustituye una investigación imparcial.', principle: 'Imparcialidad' },
+        { text: 'Los antecedentes del joven prueban que actuó igual esta vez.', score: 0, trait: 'manipulacion', feedback: 'El comportamiento pasado no prueba automáticamente un hecho nuevo.', principle: 'Evitar inferencia por antecedentes' },
         { text: 'El conflicto es solo personal y no tiene contexto social.', score: 3, feedback: 'La información sugiere que hay factores relacionales y comunitarios que explorar.', principle: 'Contexto multinivel' }
       ] , image: '/images/case-community.png'}
     ],
@@ -185,7 +185,7 @@ export const scenarios = [
     questions: [
       { prompt: '¿Qué explorarías con el supervisor?', options: [
         { text: 'Pídele que describa el proceso, los controles y la interrupción del registro minuto a minuto.', score: 10, feedback: 'Pregunta abierta y concreta que permite reconstruir la operación antes de confrontar datos.', principle: 'Reconstrucción del proceso' },
-        { text: 'Dile que su empresa envenenó el río deliberadamente.', score: 0, feedback: 'La intención y autoría no se establecen con la información disponible.', principle: 'Evitar conclusiones anticipadas' },
+        { text: 'Dile que su empresa envenenó el río deliberadamente.', score: 0, trait: 'manipulacion', feedback: 'La intención y autoría no se establecen con la información disponible.', principle: 'Evitar conclusiones anticipadas' },
         { text: 'Pregunta si parece una persona preocupada por el ambiente.', score: 1, feedback: 'La autoimagen no demuestra cumplimiento operacional.', principle: 'Evidencia conductual verificable' },
         { text: 'Acepta su explicación porque es supervisor.', score: 0, feedback: 'La posición jerárquica no elimina la necesidad de contrastar datos.', principle: 'Corroboración' }
       ] , image: '/images/mindtrace-case-overview.png'},
