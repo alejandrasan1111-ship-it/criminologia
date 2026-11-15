@@ -112,7 +112,7 @@ export default function EvidenceAnalysisMiniGame({ onComplete, onClose }) {
   useEffect(() => {
     if (!finished || reported.current) return;
     reported.current = true;
-    if (onComplete) onComplete(Math.max(0, score), game.rounds * game.reward);
+    if (onComplete) onComplete(Math.max(0, score), game.rounds * game.reward, game.id);
   }, [finished, score, game, onComplete]);
 
   /* --------------------------- selección de juego --------------------------- */

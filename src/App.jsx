@@ -159,6 +159,13 @@ function saveLocal(record) {
   localStorage.setItem('mindtrace-progress', JSON.stringify([record, ...old].slice(0, 30)));
 }
 function getLevel(rank) { return difficulties.find(d => d.rank === rank) || difficulties[0]; }
+// Rasgo que entrena cada decisión: si la opción no lo trae, se deduce de la calidad del razonamiento.
+function inferTrait(score) {
+  const value = Number(score) || 0;
+  if (value >= 8) return 'planificacion';   // rigor y método
+  if (value >= 5) return 'memoria';         // contraste y detalle
+  return 'impulsividad';                    // conclusión precipitada
+}
 function calculateProfile(decisions = []) {
   const traits = ['planificacion','empatia','manipulacion','impulsividad','memoria'];
   const sums = Object.fromEntries(traits.map(trait => [
@@ -172,24 +179,36 @@ function calculateProfile(decisions = []) {
   const percentages = Object.fromEntries(traits.map(trait => [
     trait, counts[trait] ? Math.round(sums[trait] / (counts[trait] * 10) * 100) : 0
   ]));
+  // La impulsividad se mide al revés: elegir la opción precipitada ES la señal, no un acierto.
+  percentages.impulsividad = counts.impulsividad
+    ? Math.max(0, Math.round(100 - (sums.impulsividad / counts.impulsividad) * 10))
+    : 0;
 
   // Determinar perfil psicológico basado en decisiones acumuladas
   const profileScores = {
     Organizado: counts.planificacion ? percentages.planificacion : 0,
     Reactivo: counts.impulsividad ? percentages.impulsividad : 0,
     Manipulador: counts.manipulacion ? percentages.manipulacion : 0,
-    Observador: decisions.length > 0 ? Math.max(0, Math.round(100 - (percentages.planificacion + percentages.impulsividad + percentages.manipulacion) / 3)) : 0
+    Observador: counts.memoria ? percentages.memoria : 0,
+    Empatico: counts.empatia ? percentages.empatia : 0
   };
   const ranked = Object.entries(profileScores).sort((a, b) => b[1] - a[1]);
   const topTrait = ranked[0];
   const hasEvidence = topTrait[1] >= 55;
-  const title = hasEvidence ? `${topTrait[0]}${topTrait[1] >= 80 ? ' (Dominante)' : topTrait[1] >= 65 ? ' (Fuerte)' : ''}` : 'Indeciso';
+  // Perfil integral: quien entrena (o investiga) de forma equilibrada en las cuatro dimensiones.
+  const balance = [percentages.planificacion, percentages.empatia, percentages.memoria, 100 - percentages.impulsividad];
+  const integral = decisions.length >= 3 && balance.every(value => value >= 70);
+  const baseName = integral ? 'Integral' : hasEvidence ? topTrait[0] : 'Indeciso';
+  const suffix = integral ? ' (Equilibrado)' : hasEvidence && topTrait[1] >= 80 ? ' (Dominante)' : hasEvidence && topTrait[1] >= 65 ? ' (Fuerte)' : '';
+  const title = `${baseName}${suffix}`;
   
   const descriptions = {
     Organizado: 'Tus decisiones muestran clara planificación y estructura. Elegiste rutas ordenadas y metódicas. Este perfil sugiere un enfoque sistemático en la investigación.',
     Reactivo: 'Tus decisiones reflejan alta impulsividad y respuestas inmediatas. Prioriste la acción sobre el análisis. Este perfil indica tendencias a reaccionar rápidamente ante estímulos.',
     Manipulador: 'Tus decisiones muestran patrones de influencia y manipulación interpersonal. Prestaste atención a las dinámicas sociales y relaciones. Este perfil sugiere conciencia de la influencia social.',
     Observador: 'Tus decisiones demuestran un fuerte sentido observacional. Registraste detalles que otros pasaron por alto. Este perfil indica atención meticulosa a la evidencia.',
+    Empatico: 'Tus decisiones priorizan comprender a quien declara: escuchas, contrastas sin presionar y distingues error de engaño. Este perfil indica una lectura fina de las personas.',
+    Integral: 'Planificas, lees a las personas, controlas el impulso y no se te escapa un detalle. Tus decisiones se reparten de forma equilibrada entre todas las dimensiones: el perfil menos común y el más difícil de sostener.',
     Indeciso: 'Tus decisiones no muestran un patrón dominante claro. El equilibrio entre diferentes enfoques sugiere una investigación equilibrada o dudas razonables.'
   };
   const colors = {
@@ -197,10 +216,12 @@ function calculateProfile(decisions = []) {
     Reactivo: '#FF4568',
     Manipulador: '#E61B2E',
     Observador: '#35D9FF',
+    Empatico: '#FF9F1C',
+    Integral: '#3BE8B0',
     Indeciso: '#FFD700'
   };
   
-  return { title, description: descriptions[title], color: colors[title], sums, counts, percentages, profileScores, topTrait };
+  return { title, description: descriptions[baseName], color: colors[baseName], baseName, sums, counts, percentages, profileScores, topTrait };
 }
 function BrainCircuitIcon(){return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a3 3 0 0 0-5.7 1.2A3.5 3.5 0 0 0 4 11a3.5 3.5 0 0 0 2.3 6.1A3 3 0 0 0 12 19V4Zm0 0a3 3 0 0 1 5.7 1.2A3.5 3.5 0 0 1 20 11a3.5 3.5 0 0 1-2.3 6.1A3 3 0 0 1 12 19M7 8l2 2m-3 4 3-1m8-5-2 2m3 4-3-1M12 7v10" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>}
 function ScaleIcon(){return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v17M6 6h12M4 6l-3 7h6L4 6Zm16 0-3 7h6l-3-7ZM8 21h8" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>}
@@ -417,7 +438,7 @@ export default function App() {
     const { trait = null } = option;
     const isCorrect = option.score >= 8; // Scores 8-10 are correct
     store.incrementXP(isCorrect ? 5 : 2); // Small XP for attempting, bonus for correct
-    const record = { question: question.prompt, answer: option.text, score: option.score, feedback: option.feedback, principle: option.principle, trait };
+    const record = { question: question.prompt, answer: option.text, score: option.score, feedback: option.feedback, principle: option.principle, trait: trait || inferTrait(option.score) };
     setDecisions(prev => [...prev, record]);
     setAllDecisions(store.addDecision(record));
     setSessionScore(prev => prev + option.score);
@@ -670,12 +691,14 @@ export default function App() {
               <Microscope size={16} /> Análisis Forense Mini-juego
             </button>
           </div>
-          {miniGameType && <EvidenceAnalysisMiniGame onClose={()=>setMiniGameType(null)} onComplete={(xp, max)=>{
+          {miniGameType && <EvidenceAnalysisMiniGame onClose={()=>setMiniGameType(null)} onComplete={(xp, max, gameId)=>{
             if (xp) store.incrementXP(xp);
-            const ratio = max ? xp / max : 0;
-            const trait = ratio >= 0.8 ? 'planificacion' : ratio >= 0.5 ? 'memoria' : 'impulsividad';
+            const ratio = max ? Math.min(1, xp / max) : 0;
+            // Cada ejercicio entrena un rasgo distinto: el perfil se construye con todos.
+            const gameTrait = { patternMatch:'memoria', timelineReconstruction:'planificacion', contradictionDetection:'empatia' }[gameId] || 'planificacion';
+            const trait = ratio < 0.4 ? 'impulsividad' : gameTrait;
             setAllDecisions(store.addDecision({
-              question: 'Entrenamiento forense', answer: miniGameType,
+              question: 'Entrenamiento forense', answer: gameId || miniGameType,
               score: Math.round(ratio * 10), trait
             }));
           }} />}
