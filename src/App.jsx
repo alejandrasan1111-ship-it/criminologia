@@ -49,30 +49,40 @@ const AudioManager = {
     this.masterGain.gain.value = 0.15;
     this.masterGain.connect(this.context.destination);
     
-    // Psychological ambient track: low-frequency hum with subtle modulation
-    this.ambienceSource = this.context.createOscillator();
+    // Ambiente suave: ruido marrón filtrado (lluvia/viento lejano), sin pitidos ni zumbidos.
+    const length = this.context.sampleRate * 6;
+    const buffer = this.context.createBuffer(1, length, this.context.sampleRate);
+    const channel = buffer.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < length; i++) {
+      const white = Math.random() * 2 - 1;
+      last = (last + 0.02 * white) / 1.02;
+      channel[i] = last * 3.5;
+    }
+    this.ambienceSource = this.context.createBufferSource();
+    this.ambienceSource.buffer = buffer;
+    this.ambienceSource.loop = true;
+    
     this.ambienceGain = this.context.createGain();
+    this.ambienceGain.gain.value = 0.5;
     
     this.ambienceType = this.context.createBiquadFilter();
     this.ambienceType.type = 'lowpass';
-    this.ambienceType.frequency.value = 300;
-    
-    this.ambienceSource.type = 'sine';
-    this.ambienceSource.frequency.value = 60;
-    this.ambienceSource.frequency.value += Math.sin(Date.now() * 0.003) * 1;
+    this.ambienceType.frequency.value = 520;
+    this.ambienceType.Q.value = 0.4;
     
     this.ambienceSource.connect(this.ambienceGain);
     this.ambienceGain.connect(this.ambienceType);
     this.ambienceType.connect(this.masterGain);
-    this.ambienceGain.gain.value = 0.03;
     
+    // Ola muy lenta que abre y cierra el filtro: sensación de viento, no de pulso.
     this.ambienceLFO = this.context.createOscillator();
     this.lfoGain = this.context.createGain();
-    this.lfoGain.gain.value = 0.02;
-    // Solo se puede modular un AudioParam existente (gain), nunca un GainNode completo.
-    this.lfoGain.connect(this.ambienceGain.gain);
-    this.ambienceLFO.type = 'triangle';
-    this.ambienceLFO.frequency.value = 0.15;
+    this.lfoGain.gain.value = 180;
+    // Solo se puede modular un AudioParam existente (frequency), nunca un GainNode completo.
+    this.lfoGain.connect(this.ambienceType.frequency);
+    this.ambienceLFO.type = 'sine';
+    this.ambienceLFO.frequency.value = 0.05;
     this.ambienceLFO.start();
     
     this.ambienceSource.start();
@@ -102,10 +112,10 @@ const AudioManager = {
     try {
       const osc = this.context.createOscillator();
       const gain = this.context.createGain();
-      gain.gain.value = tone === 'success' ? 0.15 : 0.1;
-      gain.gain.setTargetAtTime(0.02, this.context.currentTime, 0.1);
-      osc.type = tone === 'success' ? 'sine' : 'triangle';
-      osc.frequency.value = tone === 'success' ? 523 : 294; // C5 or D5
+      gain.gain.value = tone === 'success' ? 0.08 : 0.06;
+      gain.gain.setTargetAtTime(0.01, this.context.currentTime, 0.12);
+      osc.type = 'sine';
+      osc.frequency.value = tone === 'success' ? 392 : 262; // notas suaves, sin pitido agudo
       osc.connect(gain);
       gain.connect(this.masterGain);
       osc.start();
@@ -161,19 +171,25 @@ function saveLocal(record) {
 function getLevel(rank) { return difficulties.find(d => d.rank === rank) || difficulties[0]; }
 // Rasgo que entrena cada decisión: si la opción no lo trae, se deduce de la calidad del razonamiento.
 // Las tácticas de presión, presunción de culpa o exposición pública marcan el perfil Manipulador.
-const COERCIVE = /(miente|ocultas|culpable|demuestra que|confirma que|acusa|presion|oblig|amenaz|exige|insiste|publicar|difund|senala a|creen que|capaces de|ya decidi|envenen|te conviene|dile que|sugiere que|hazle saber|admita|confiese)/;
+const COERCIVE = /(miente|ocultas|culpable|demuestra que|confirma que|acusa|presion|oblig|amenaz|exige|insiste|publicar|difund|senala a|creen que|capaces de|ya decidi|envenen|te conviene|dile que|sugiere que|hazle saber|admita|confiese|respalden|coordinad)/;
+// Aceptar jerarquía, cargo o confesión como prueba suficiente define el perfil dogmático.
+const DOGMATIC = /(jerarqu|cargo|supervisor|gerente|autoridad|superior|rango|confesion|confiese|lo dijo primero|porque es el|porque ocupa|orden|director)/;
 function inferTrait(option) {
   const score = Number(option?.score) || 0;
   const text = String(option?.text || '')
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   // Solo las respuestas débiles o incorrectas pueden ser coercitivas: una buena práctica nunca lo es.
   if (score <= 3 && COERCIVE.test(text)) return 'manipulacion';
+  if (score <= 3 && DOGMATIC.test(text)) return 'dogmatismo';
   if (score >= 8) return 'planificacion';   // rigor y método
   if (score >= 5) return 'memoria';         // contraste y detalle
   return 'impulsividad';                    // conclusión precipitada
 }
+function getDeclaredMbti() {
+  try { return JSON.parse(localStorage.getItem('mindtrace-mbti') || 'null'); } catch { return null; }
+}
 function calculateProfile(decisions = []) {
-  const traits = ['planificacion','empatia','manipulacion','impulsividad','memoria'];
+  const traits = ['planificacion','empatia','manipulacion','impulsividad','memoria','dogmatismo'];
   const sums = Object.fromEntries(traits.map(trait => [
     trait,
     decisions.reduce((total, decision) =>
@@ -193,6 +209,18 @@ function calculateProfile(decisions = []) {
   percentages.manipulacion = counts.manipulacion
     ? Math.max(0, Math.round(100 - (sums.manipulacion / counts.manipulacion) * 10))
     : 0;
+  // Y el dogmatismo: aceptar cargo o confesión como prueba ES la señal.
+  percentages.dogmatismo = counts.dogmatismo
+    ? Math.max(0, Math.round(100 - (sums.dogmatismo / counts.dogmatismo) * 10))
+    : 0;
+
+  // Exploración de escena: qué parte de los puntos de inspección revisó antes de decidir.
+  const explored = decisions
+    .map(decision => Number(decision.explored))
+    .filter(value => Number.isFinite(value) && value >= 0);
+  const exploracion = explored.length
+    ? Math.round((explored.reduce((total, value) => total + value, 0) / explored.length) * 100)
+    : 0;
 
   // Determinar perfil psicológico basado en decisiones acumuladas
   const profileScores = {
@@ -200,13 +228,15 @@ function calculateProfile(decisions = []) {
     Reactivo: counts.impulsividad ? percentages.impulsividad : 0,
     Manipulador: counts.manipulacion ? percentages.manipulacion : 0,
     Observador: counts.memoria ? percentages.memoria : 0,
-    Empatico: counts.empatia ? percentages.empatia : 0
+    Empatico: counts.empatia ? percentages.empatia : 0,
+    Dogmatico: counts.dogmatismo ? percentages.dogmatismo : 0,
+    Explorador: explored.length >= 2 ? exploracion : 0
   };
   const ranked = Object.entries(profileScores).sort((a, b) => b[1] - a[1]);
   const topTrait = ranked[0];
   const hasEvidence = topTrait[1] >= 55;
-  // Perfil integral: quien entrena (o investiga) de forma equilibrada en las cuatro dimensiones.
-  const balance = [percentages.planificacion, percentages.empatia, percentages.memoria, 100 - percentages.impulsividad, 100 - percentages.manipulacion];
+  // Perfil integral: quien entrena (o investiga) de forma equilibrada en todas las dimensiones.
+  const balance = [percentages.planificacion, percentages.empatia, percentages.memoria, 100 - percentages.impulsividad, 100 - percentages.manipulacion, 100 - percentages.dogmatismo];
   const integral = decisions.length >= 3 && balance.every(value => value >= 70);
   const baseName = integral ? 'Integral' : hasEvidence ? topTrait[0] : 'Indeciso';
   const suffix = integral ? ' (Equilibrado)' : hasEvidence && topTrait[1] >= 80 ? ' (Dominante)' : hasEvidence && topTrait[1] >= 65 ? ' (Fuerte)' : '';
@@ -218,6 +248,8 @@ function calculateProfile(decisions = []) {
     Manipulador: 'Tus decisiones muestran patrones de influencia y manipulación interpersonal. Prestaste atención a las dinámicas sociales y relaciones. Este perfil sugiere conciencia de la influencia social.',
     Observador: 'Tus decisiones demuestran un fuerte sentido observacional. Registraste detalles que otros pasaron por alto. Este perfil indica atención meticulosa a la evidencia.',
     Empatico: 'Tus decisiones priorizan comprender a quien declara: escuchas, contrastas sin presionar y distingues error de engaño. Este perfil indica una lectura fina de las personas.',
+    Dogmatico: 'Tus decisiones aceptan la jerarquía, el cargo o la confesión como prueba suficiente. Este perfil indica una investigación que confía en la autoridad antes que en el dato verificable.',
+    Explorador: 'Antes de decidir recorriste la escena: inspeccionaste los puntos, contrastaste lo que viste y buscaste lo que otros dan por obvio. Este perfil indica curiosidad metódica.',
     Integral: 'Planificas, lees a las personas, controlas el impulso y no se te escapa un detalle. Tus decisiones se reparten de forma equilibrada entre todas las dimensiones: el perfil menos común y el más difícil de sostener.',
     Indeciso: 'Tus decisiones no muestran un patrón dominante claro. El equilibrio entre diferentes enfoques sugiere una investigación equilibrada o dudas razonables.'
   };
@@ -227,11 +259,13 @@ function calculateProfile(decisions = []) {
     Manipulador: '#E61B2E',
     Observador: '#35D9FF',
     Empatico: '#FF9F1C',
+    Dogmatico: '#B39DDB',
+    Explorador: '#2EC4B6',
     Integral: '#3BE8B0',
     Indeciso: '#FFD700'
   };
   
-  return { title, description: descriptions[baseName], color: colors[baseName], baseName, sums, counts, percentages, profileScores, topTrait };
+  return { title, description: descriptions[baseName], color: colors[baseName], baseName, sums, counts, percentages, exploracion, profileScores, topTrait };
 }
 function BrainCircuitIcon(){return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a3 3 0 0 0-5.7 1.2A3.5 3.5 0 0 0 4 11a3.5 3.5 0 0 0 2.3 6.1A3 3 0 0 0 12 19V4Zm0 0a3 3 0 0 1 5.7 1.2A3.5 3.5 0 0 1 20 11a3.5 3.5 0 0 1-2.3 6.1A3 3 0 0 1 12 19M7 8l2 2m-3 4 3-1m8-5-2 2m3 4-3-1M12 7v10" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>}
 function ScaleIcon(){return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v17M6 6h12M4 6l-3 7h6L4 6Zm16 0-3 7h6l-3-7ZM8 21h8" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>}
@@ -431,6 +465,17 @@ export default function App() {
   const avgScore = history.length ? Math.round(totalScore / history.length) : 0;
   const currentRank = LEVELS.indexOf(difficulty) + 1;
   const profileReport = calculateProfile(allDecisions);
+  const declaredMbti = getDeclaredMbti();
+  const coherence = !declaredMbti?.type || allDecisions.length < 2 ? null : (() => {
+    const structured = declaredMbti.type.includes('J');
+    const observed = structured ? profileReport.percentages.planificacion : profileReport.exploracion;
+    return {
+      type: declaredMbti.type,
+      axis: structured ? 'estructura' : 'exploración',
+      observed,
+      verdict: observed >= 70 ? 'Coherente' : observed >= 45 ? 'Parcialmente coherente' : 'Incoherente'
+    };
+  })();
 
   useEffect(() => {
     if (supabaseConfigured) loadProgress().then(setRemoteHistory).catch(() => {});
@@ -448,7 +493,9 @@ export default function App() {
     const { trait = null } = option;
     const isCorrect = option.score >= 8; // Scores 8-10 are correct
     store.incrementXP(isCorrect ? 5 : 2); // Small XP for attempting, bonus for correct
-    const record = { question: question.prompt, answer: option.text, score: option.score, feedback: option.feedback, principle: option.principle, trait: trait || inferTrait(option) };
+    const totalPins = scenario.scene?.hotspots?.length || 0;
+    const exploredRatio = totalPins ? Math.min(1, discovered.length / totalPins) : 0;
+    const record = { question: question.prompt, answer: option.text, score: option.score, feedback: option.feedback, principle: option.principle, trait: trait || inferTrait(option), explored: exploredRatio };
     setDecisions(prev => [...prev, record]);
     setAllDecisions(store.addDecision(record));
     setSessionScore(prev => prev + option.score);
@@ -554,7 +601,7 @@ export default function App() {
               <p>Explora, analiza y descubre los patrones de conducta que se esconden detrás de cada caso. La criminología también comienza en la mente.</p>
               <button className="landing-cta" onClick={()=>go('scenarios')}>COMENZAR <ArrowRight size={20}/></button>
             </div>
-            <div className="landing-face-wrap" aria-label="Emblema MINDTRACE: rostro dividido azul y rojo"><div className="landing-face-ring"/><MindtraceMark size={420}/></div>
+            <div className="landing-face-wrap" aria-label="Emblema MINDTRACE: mente dividida"><div className="landing-face-ring"/><img className="landing-emblem" src="/images/mindtrace-emblem.webp" alt="Emblema MINDTRACE: mente dividida"/></div>
             <div className="landing-disciplines">
               <div className="landing-motto">ANALIZA&nbsp; · &nbsp;IDENTIFICA&nbsp; · &nbsp;RESUELVE</div>
               <div><BrainCircuitIcon/><span><b>CRIMINOLOGÍA</b><small>Comprende el comportamiento<br/>delictivo.</small></span></div>
@@ -692,6 +739,14 @@ export default function App() {
                 <div className="profile-hud-metric"><div><span>Control de impulsos</span><b>{100-profileReport.percentages.impulsividad}%</b></div><div className="hud-bar-container"><i className="hud-bar-fill" style={{width:(100-profileReport.percentages.impulsividad)+'%','--hud-color':'#FFD700'}}/></div></div>
                 <div className="profile-hud-metric"><div><span>Atención al detalle</span><b>{profileReport.percentages.memoria}%</b></div><div className="hud-bar-container"><i className="hud-bar-fill" style={{width:profileReport.percentages.memoria+'%','--hud-color':'#35D9FF'}}/></div></div>
                 <div className="profile-hud-metric"><div><span>Tendencia a influir o presionar</span><b>{profileReport.percentages.manipulacion}%</b></div><div className="hud-bar-container"><i className="hud-bar-fill" style={{width:profileReport.percentages.manipulacion+'%','--hud-color':'#E61B2E'}}/></div></div>
+                <div className="profile-hud-metric"><div><span>Exploración de escena</span><b>{profileReport.exploracion}%</b></div><div className="hud-bar-container"><i className="hud-bar-fill" style={{width:profileReport.exploracion+'%','--hud-color':'#2EC4B6'}}/></div></div>
+                <div className="profile-hud-metric"><div><span>Rigidez ante la autoridad</span><b>{profileReport.percentages.dogmatismo}%</b></div><div className="hud-bar-container"><i className="hud-bar-fill" style={{width:profileReport.percentages.dogmatismo+'%','--hud-color':'#B39DDB'}}/></div></div>
+                <div className="profile-coherence">
+                  <span className="eyebrow">CONTRASTE CON TU TEST DECLARADO</span>
+                  {coherence
+                    ? <p>Declaraste <strong>{coherence.type}</strong>. Tu conducta muestra <strong>{coherence.observed}%</strong> de {coherence.axis}: <b>{coherence.verdict}</b>.</p>
+                    : <p>Haz el test MBTI para contrastar lo que declaras con cómo investigas de verdad.</p>}
+                </div>
                 <small className="profile-note">{allDecisions.length} {allDecisions.length === 1 ? 'decisión registrada' : 'decisiones registradas'} · el perfil se recalcula con cada caso y cada entrenamiento.</small>
               </>
             )}

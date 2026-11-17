@@ -23,6 +23,8 @@ export function MbtiTest() {
     if (currentIndex === mbtiQuestions.length - 1) {
       const profileType = calculateMBTI(nextAnswers);
       setResult({ type: profileType, ...getMBTIProfile(profileType) });
+      // Se guarda para contrastar el test declarado con la conducta observada en el juego.
+      try { localStorage.setItem('mindtrace-mbti', JSON.stringify({ type: profileType, at: Date.now() })); } catch { /* almacenamiento no disponible */ }
       return;
     }
 
